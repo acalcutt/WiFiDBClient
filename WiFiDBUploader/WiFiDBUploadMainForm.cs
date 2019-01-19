@@ -264,7 +264,7 @@ namespace WiFiDBUploader
 
         private void UpdateRegKeys()
         {
-            Microsoft.Win32.RegistryKey rootKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("SOFTWARE\\Vistumbler\\WiFiDB\\Uploader", true);
+            Microsoft.Win32.RegistryKey rootKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("SOFTWARE\\WiFiDB\\Uploader", true);
             if (rootKey != null)
             {
                 string version = (string)rootKey.GetValue("Version");
@@ -330,7 +330,7 @@ namespace WiFiDBUploader
         private void LoadSettings()
         {
             Microsoft.Win32.RegistryKey rootKey;
-            rootKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("SOFTWARE").CreateSubKey("Vistumbler").CreateSubKey("WiFiDB").CreateSubKey("Uploader");
+            rootKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("SOFTWARE").CreateSubKey("WiFiDB").CreateSubKey("Uploader");
             string[] SubKeys = rootKey.GetSubKeyNames();
 
             if (SubKeys.Count() == 0)
@@ -462,7 +462,7 @@ namespace WiFiDBUploader
             */
             WDBTraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "Start Call: WriteServerSettings");
             Microsoft.Win32.RegistryKey rootKey;
-            rootKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("SOFTWARE").CreateSubKey("Vistumbler").CreateSubKey("WiFiDB").CreateSubKey("Uploader").CreateSubKey("Servers");
+            rootKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("SOFTWARE").CreateSubKey("WiFiDB").CreateSubKey("Uploader").CreateSubKey("Servers");
 
             List<ServerNameObj> VarNameList = new List<ServerNameObj>();
             foreach (ServerObj server in ServerList)
@@ -511,7 +511,7 @@ namespace WiFiDBUploader
             WDBTraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "Start Call: WriteGlobalSettings");
             /* Screw the app.config file, registry is easier to manage. */
             Microsoft.Win32.RegistryKey rootKey;
-            rootKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("SOFTWARE").CreateSubKey("Vistumbler").CreateSubKey("WiFiDB").CreateSubKey("Uploader");
+            rootKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("SOFTWARE").CreateSubKey("WiFiDB").CreateSubKey("Uploader");
 
             rootKey.SetValue("AutoUploadFolder", AutoUploadFolder);
             rootKey.SetValue("AutoCloseTimerSeconds", AutoCloseTimerSeconds);

@@ -1,13 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.271
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WiFiDB Client", "WiFiDB Client\WiFiDB Client.csproj", "{E7F2E53A-0E95-4BEB-898B-344BA4E4EB13}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WDBAPI", "WDBAPI\WDBAPI.csproj", "{61F6AC56-A30E-4F9B-971F-647A8A9C8584}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WiFiDBUploader", "WiFiDBUploader\WiFiDBUploader.csproj", "{A057B4AC-F0DF-40A0-B033-B4F38EBDA2D2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WDB_Uploader", "WiFiDBUploader\WDB_Uploader.csproj", "{A057B4AC-F0DF-40A0-B033-B4F38EBDA2D2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WDBCommon", "WDBCommon\WDBCommon.csproj", "{F4741EBC-A256-4924-B760-D990EF40E825}"
 EndProject
@@ -101,5 +101,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {15E57443-F83E-414C-B5C2-FA8B6BA9FB5E}
 	EndGlobalSection
 EndGlobal

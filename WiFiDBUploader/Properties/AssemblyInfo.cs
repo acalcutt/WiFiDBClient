@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("WiFiDBUploader")]
+[assembly: AssemblyTitle("WDB_Uploader")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("WifiDB.net")]
-[assembly: AssemblyProduct("WiFiDBUploader")]
-[assembly: AssemblyCopyright("Copyright 2019")]
+[assembly: AssemblyProduct("WDB_Uploader")]
+[assembly: AssemblyCopyright("WifiDB 2019")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
