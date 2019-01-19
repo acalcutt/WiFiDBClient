@@ -77,8 +77,8 @@ namespace WiFiDBUploader
         private string ThreadName = "Main";
         private string ObjectName = "Main";
 
-        private string WDBVersionNumber = "v1.0";
-        private string WDBCodeName = "Bosco";
+        private string WDBVersionNumber = "1.2.0";
+        private string WDBCodeName = "Nesquik";
 
         private struct QueryArguments
         {
@@ -264,45 +264,28 @@ namespace WiFiDBUploader
 
         private void UpdateRegKeys()
         {
-            Microsoft.Win32.RegistryKey rootKey;
-            rootKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("SOFTWARE").CreateSubKey("Vistumbler").CreateSubKey("WiFiDB").CreateSubKey("Uploader");
-            string[] SubKeys = rootKey.GetSubKeyNames();
-            int strIndex = 0;
-            int strIndex1 = 0;
-            int strNumber;
-            int strNumber1;
-
-            for (strNumber = 0; strNumber < SubKeys.Length; strNumber++)
+            Microsoft.Win32.RegistryKey rootKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("SOFTWARE\\Vistumbler\\WiFiDB\\Uploader", true);
+            if (rootKey != null)
             {
-                strIndex = SubKeys[strNumber].IndexOf("AutoImportThreadEnabled");
-                if (strIndex >= 0)
-                    break;
-            }
-            for (strNumber1 = 0; strNumber1 < SubKeys.Length; strNumber1++)
-            {
-                strIndex1 = SubKeys[strNumber1].IndexOf("AutoImportThreadSeconds");
-                if (strIndex1 >= 0)
-                    break;
-            }
-            Console.WriteLine("String number: {0}\nString index: {1}",
-                strNumber, strIndex);
+                string version = (string)rootKey.GetValue("Version");
+                if (version != WDBVersionNumber)
+                {
+                    rootKey.SetValue("Version", WDBVersionNumber);
+                    rootKey.SetValue("DefaultImportNotes", "WiFiDB Uploader\nVersion :" + WDBVersionNumber + "\nCode Name: " + WDBCodeName);
+                }
 
-            Console.WriteLine("String number: {0}\nString index: {1}",
-                strNumber1, strIndex1);
-            throw new Exception();
+                string AutoImportThreadEnabled = (string)rootKey.GetValue("AutoImportThreadEnabled");
+                if (AutoImportThreadEnabled == null)
+                {
+                    rootKey.SetValue("AutoImportThreadEnable", "False");
+                }
 
-            if ( strIndex == -1)
-            {
-                rootKey.SetValue("AutoImportThreadEnable", "False");
+                int? AutoImportThreadSeconds = (int?)rootKey.GetValue("AutoImportThreadSeconds");
+                if (AutoImportThreadSeconds == null)
+                {
+                    rootKey.SetValue("AutoImportThreadSeconds", 30);
+                }
             }
-            if (strIndex1 == -1)
-            {
-                rootKey.SetValue("AutoImportThreadSeconds", 30);
-            }
-
-
-            //
-            //
         }
 
         private void CreateRegistryKeys(Microsoft.Win32.RegistryKey rootKey)
@@ -310,7 +293,8 @@ namespace WiFiDBUploader
             Microsoft.Win32.RegistryKey ServersKey;
             Microsoft.Win32.RegistryKey DefaultServerKey;
 
-            rootKey.SetValue("DefaultImportTitle", "Generic Import Title");
+            rootKey.SetValue("Version", WDBVersionNumber);
+            rootKey.SetValue("DefaultImportTitle", "%DATETIME%");
             rootKey.SetValue("DefaultImportTitleIsDateTime", "True");
             rootKey.SetValue("DefaultImportNotes", "WiFiDB Uploader\nVersion :" + WDBVersionNumber + "\nCode Name: " + WDBCodeName);
             rootKey.SetValue("UseDefaultImportValues", "False");
@@ -345,7 +329,6 @@ namespace WiFiDBUploader
 
         private void LoadSettings()
         {
-            UpdateRegKeys();
             Microsoft.Win32.RegistryKey rootKey;
             rootKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("SOFTWARE").CreateSubKey("Vistumbler").CreateSubKey("WiFiDB").CreateSubKey("Uploader");
             string[] SubKeys = rootKey.GetSubKeyNames();
@@ -357,6 +340,7 @@ namespace WiFiDBUploader
             }
             else
             {
+                UpdateRegKeys();
                 foreach (string value in rootKey.GetValueNames())
                 {
                     switch (value)
