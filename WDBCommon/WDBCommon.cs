@@ -171,7 +171,7 @@ namespace WDBCommon
                     TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Auto Import Folder: " + Path);
                     var md5 = MD5.Create();
 
-                    string[] extensions = new string[] { "*.vs1", "*.vsz", "*.csv", "*.db3" };
+                    string[] extensions = new string[] { "*.vs1", "*.vsz", "*.txt", "*.csv", "*.db", "*.db3", "*.mdb" };
 
                     // Loop through the file extension types, find them in the provided folder, then import it.
                     foreach (string ext in extensions)

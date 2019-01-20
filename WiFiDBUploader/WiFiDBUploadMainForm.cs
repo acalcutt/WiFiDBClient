@@ -77,8 +77,7 @@ namespace WiFiDBUploader
         private string ThreadName = "Main";
         private string ObjectName = "Main";
 
-        private string WDBVersionNumber = "1.2.0";
-        private string WDBCodeName = "Nesquik";
+        private string WDBVersionNumber = "1.2.1";
 
         private struct QueryArguments
         {
@@ -271,7 +270,7 @@ namespace WiFiDBUploader
                 if (version != WDBVersionNumber)
                 {
                     rootKey.SetValue("Version", WDBVersionNumber);
-                    rootKey.SetValue("DefaultImportNotes", "WiFiDB Uploader\nVersion :" + WDBVersionNumber + "\nCode Name: " + WDBCodeName);
+                    rootKey.SetValue("DefaultImportNotes", "WDB Uploader\nVersion: " + WDBVersionNumber);
                 }
 
                 string AutoImportThreadEnabled = (string)rootKey.GetValue("AutoImportThreadEnabled");
@@ -296,7 +295,7 @@ namespace WiFiDBUploader
             rootKey.SetValue("Version", WDBVersionNumber);
             rootKey.SetValue("DefaultImportTitle", "%DATETIME%");
             rootKey.SetValue("DefaultImportTitleIsDateTime", "True");
-            rootKey.SetValue("DefaultImportNotes", "WiFiDB Uploader\nVersion :" + WDBVersionNumber + "\nCode Name: " + WDBCodeName);
+            rootKey.SetValue("DefaultImportNotes", "WDB Uploader\nVersion: " + WDBVersionNumber);
             rootKey.SetValue("UseDefaultImportValues", "False");
             rootKey.SetValue("UseAutoDateTimeTitle", "False");
             rootKey.SetValue("AutoUploadFolder", "False");
@@ -752,7 +751,7 @@ namespace WiFiDBUploader
             OpenFileDialog openFileDialog1 = new OpenFileDialog();
 
             openFileDialog1.InitialDirectory = "c:\\";
-            openFileDialog1.Filter = "All files (*.*)|*.*|CSV files (*.CSV|*.CSV|VS1 files (*.VS1)|*.VS1|VSZ files (*.VSZ)|*.VSZ";
+            openFileDialog1.Filter = "All files (*.*)|*.*|Vistumbler VS1 (*.vs1)|*.vs1|Vistumbler VSZ (*.vsz)|*.vsz|Vistumbler TXT (*.txt)|*.txt|Vistumbler CSV (*.csv)|*.csv|Vistumbler MDB (*.mdb)|*.mdb|Wardrive DB (*.db)|*.db|Wardrive DB3 (*.db3)|*.db3";
             openFileDialog1.FilterIndex = 2;
             openFileDialog1.RestoreDirectory = true;
 
