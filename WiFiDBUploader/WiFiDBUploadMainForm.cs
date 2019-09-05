@@ -77,7 +77,7 @@ namespace WiFiDBUploader
         private string ThreadName = "Main";
         private string ObjectName = "Main";
 
-        private string WDBVersionNumber = "1.2.1";
+        private string WDBVersionNumber = "1.3";
 
         private struct QueryArguments
         {
