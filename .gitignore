@@ -5,3 +5,4 @@ Build/
 *.manifest
 .vs/
 WiFiDBUploader/App.config
+*.pfx

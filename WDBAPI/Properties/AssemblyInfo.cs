@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("WDBAPI")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("CA, Inc.")]
+[assembly: AssemblyCompany("Random Intervals")]
 [assembly: AssemblyProduct("WDBAPI")]
-[assembly: AssemblyCopyright("Copyright © CA, Inc. 2016")]
+[assembly: AssemblyCopyright("Copyright ©  2016")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
