@@ -104,28 +104,28 @@ namespace WiFiDBUploader
             // importFolderToolStripMenuItem
             // 
             this.importFolderToolStripMenuItem.Name = "importFolderToolStripMenuItem";
-            this.importFolderToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
+            this.importFolderToolStripMenuItem.Size = new System.Drawing.Size(161, 22);
             this.importFolderToolStripMenuItem.Text = "Import Folder";
             this.importFolderToolStripMenuItem.Click += new System.EventHandler(this.importFolderToolStripMenuItem_Click);
             // 
             // importFileToolStripMenuItem
             // 
             this.importFileToolStripMenuItem.Name = "importFileToolStripMenuItem";
-            this.importFileToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
+            this.importFileToolStripMenuItem.Size = new System.Drawing.Size(161, 22);
             this.importFileToolStripMenuItem.Text = "Import File";
             this.importFileToolStripMenuItem.Click += new System.EventHandler(this.importFileToolStripMenuItem_Click);
             // 
             // exitAndSaveDBToolStripMenuItem
             // 
             this.exitAndSaveDBToolStripMenuItem.Name = "exitAndSaveDBToolStripMenuItem";
-            this.exitAndSaveDBToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
+            this.exitAndSaveDBToolStripMenuItem.Size = new System.Drawing.Size(161, 22);
             this.exitAndSaveDBToolStripMenuItem.Text = "Exit and Save DB";
             this.exitAndSaveDBToolStripMenuItem.Click += new System.EventHandler(this.exitAndSaveDBToolStripMenuItem_Click);
             // 
             // exitToolStripMenuItem
             // 
             this.exitToolStripMenuItem.Name = "exitToolStripMenuItem";
-            this.exitToolStripMenuItem.Size = new System.Drawing.Size(160, 22);
+            this.exitToolStripMenuItem.Size = new System.Drawing.Size(161, 22);
             this.exitToolStripMenuItem.Text = "Exit";
             this.exitToolStripMenuItem.Click += new System.EventHandler(this.exitToolStripMenuItem_Click);
             // 
@@ -209,6 +209,7 @@ namespace WiFiDBUploader
             this.listView1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.listView1.FullRowSelect = true;
             this.listView1.GridLines = true;
+            this.listView1.HideSelection = false;
             this.listView1.Location = new System.Drawing.Point(3, 3);
             this.listView1.Name = "listView1";
             this.listView1.Size = new System.Drawing.Size(1266, 533);
@@ -386,7 +387,7 @@ namespace WiFiDBUploader
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MainMenuStrip = this.menuStrip1;
             this.Name = "WiFiDBUploadMainForm";
-            this.Text = "WDB Uploader v1.3 - WifiDB.net";
+            this.Text = "WDB Uploader v1.4 - WifiDB.net";
             this.menuStrip1.ResumeLayout(false);
             this.menuStrip1.PerformLayout();
             this.statusStrip1.ResumeLayout(false);

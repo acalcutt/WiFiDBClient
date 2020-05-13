@@ -4,14 +4,16 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{E7F2E53A-0E95-4BEB-898B-344BA4E4EB13}</ProjectGuid>
+    <ProjectGuid>{A057B4AC-F0DF-40A0-B033-B4F38EBDA2D2}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>WiFiDB_Client</RootNamespace>
-    <AssemblyName>WiFiDB Client</AssemblyName>
+    <RootNamespace>WiFiDBUploader</RootNamespace>
+    <AssemblyName>WiFiDBUploader</AssemblyName>
     <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <TargetFrameworkProfile />
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -24,10 +26,8 @@
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
-    <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
-    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -43,7 +43,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\Build\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -79,7 +79,7 @@
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
-    <OutputPath>..\Build\</OutputPath>
+    <OutputPath>bin\x86\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <Optimize>true</Optimize>
     <DebugType>pdbonly</DebugType>
@@ -89,22 +89,17 @@
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetZone>LocalIntranet</TargetZone>
+    <ApplicationIcon>WifiDB_Uploader_Big.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup>
-    <GenerateManifests>false</GenerateManifests>
-  </PropertyGroup>
-  <PropertyGroup>
-  </PropertyGroup>
-  <PropertyGroup>
-    <SignAssembly>true</SignAssembly>
-  </PropertyGroup>
-  <PropertyGroup>
-    <AssemblyOriginatorKeyFile>WiFiDBSigningKey.pfx</AssemblyOriginatorKeyFile>
+    <NoWin32Manifest>true</NoWin32Manifest>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Data.SQLite">
+      <HintPath>..\Libraries\System.Data.SQLite.dll</HintPath>
+    </Reference>
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -116,16 +111,100 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="WdbClientForm.cs">
+    <Compile Include="AddServer.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="WdbClientForm.Designer.cs">
-      <DependentUpon>WdbClientForm.cs</DependentUpon>
+    <Compile Include="AddServer.Designer.cs">
+      <DependentUpon>AddServer.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Auto Upload Settings.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Auto Upload Settings.Designer.cs">
+      <DependentUpon>Auto Upload Settings.cs</DependentUpon>
+    </Compile>
+    <Compile Include="AutoCloseTimer.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="AutoCloseTimer.Designer.cs">
+      <DependentUpon>AutoCloseTimer.cs</DependentUpon>
+    </Compile>
+    <Compile Include="BGThreadsSettings.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="BGThreadsSettings.Designer.cs">
+      <DependentUpon>BGThreadsSettings.cs</DependentUpon>
+    </Compile>
+    <Compile Include="EditServer.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="EditServer.Designer.cs">
+      <DependentUpon>EditServer.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Import Settings.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Import Settings.Designer.cs">
+      <DependentUpon>Import Settings.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ImportDetails.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ImportDetails.Designer.cs">
+      <DependentUpon>ImportDetails.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ListViewNF.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="LoggingSettings.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="LoggingSettings.Designer.cs">
+      <DependentUpon>LoggingSettings.cs</DependentUpon>
+    </Compile>
+    <Compile Include="WiFiDB Settings.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="WiFiDB Settings.Designer.cs">
+      <DependentUpon>WiFiDB Settings.cs</DependentUpon>
+    </Compile>
+    <Compile Include="WiFiDBUploadMainForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="WiFiDBUploadMainForm.Designer.cs">
+      <DependentUpon>WiFiDBUploadMainForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <EmbeddedResource Include="WdbClientForm.resx">
-      <DependentUpon>WdbClientForm.cs</DependentUpon>
+    <EmbeddedResource Include="AddServer.resx">
+      <DependentUpon>AddServer.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Auto Upload Settings.resx">
+      <DependentUpon>Auto Upload Settings.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="AutoCloseTimer.resx">
+      <DependentUpon>AutoCloseTimer.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="BGThreadsSettings.resx">
+      <DependentUpon>BGThreadsSettings.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="EditServer.resx">
+      <DependentUpon>EditServer.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Import Settings.resx">
+      <DependentUpon>Import Settings.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ImportDetails.resx">
+      <DependentUpon>ImportDetails.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="LoggingSettings.resx">
+      <DependentUpon>LoggingSettings.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="WiFiDB Settings.resx">
+      <DependentUpon>WiFiDB Settings.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="WiFiDBUploadMainForm.resx">
+      <DependentUpon>WiFiDBUploadMainForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
@@ -135,10 +214,7 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
-      <DesignTime>True</DesignTime>
     </Compile>
-    <None Include="ClassDiagram1.cd" />
-    <None Include="Properties\app.manifest" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -148,7 +224,6 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
-    <None Include="WiFiDBSigningKey.pfx" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -170,6 +245,9 @@
       <Project>{01af9905-8fd2-496d-b8da-dfc5290d665e}</Project>
       <Name>WDBTraceLog</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="WifiDB_Uploader_Big.ico" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include=".NETFramework,Version=v4.5.2">

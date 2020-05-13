@@ -77,7 +77,7 @@ namespace WiFiDBUploader
         private string ThreadName = "Main";
         private string ObjectName = "Main";
 
-        private string WDBVersionNumber = "1.3";
+        private string WDBVersionNumber = "1.4";
 
         private struct QueryArguments
         {
@@ -1711,6 +1711,7 @@ namespace WiFiDBUploader
             Application.Exit();
             WDBTraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "End Call: WiFiDBUploadMainForm_FormClosed");
         }
+
     }
 
 
