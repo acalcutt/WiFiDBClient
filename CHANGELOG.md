@@ -7,6 +7,11 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 2.0.0
+### ✨ Features and improvements
+
+### 🐞 Bug fixes
+
 
 ## 2.0.0-rc.1
 ### ✨ Features and improvements
