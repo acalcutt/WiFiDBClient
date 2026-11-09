@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # The two architectures build on different runners and fail for different
+      # reasons; cancelling one because the other failed hides half the answer.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+            rid: win-x64
+          - arch: arm64
+            runner: windows-11-arm
+            rid: win-arm64
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore "WiFiDB Client.sln"
+
+      - name: Build
+        run: dotnet build "WiFiDB Client.sln" --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test "WiFiDB Client.sln" --configuration Release --no-build --verbosity normal
+
+      - name: Publish (${{ matrix.arch }})
+        run: |
+          dotnet publish WiFiDBUploader/WDB_Uploader.csproj `
+            --configuration Release `
+            --runtime ${{ matrix.rid }} `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            --output ./publish/${{ matrix.arch }}
+
+      - name: Upload CI build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: WiFiDBUploader-ci-${{ matrix.arch }}-${{ github.sha }}
+          path: ./publish/${{ matrix.arch }}/
+          retention-days: 7
