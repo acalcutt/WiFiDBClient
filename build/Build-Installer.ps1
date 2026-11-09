@@ -39,7 +39,7 @@ function Get-NsisText([string]$Text) { $Text.Replace('$', '$$') }
 $dirs = @(Get-ChildItem -LiteralPath $source -Recurse -Directory | Sort-Object FullName)
 $install = @('!macro InstallFiles')
 $uninstall = @('!macro UninstallFiles')
-foreach ($dir in @($source) + $dirs.FullName) {
+foreach ($dir in @($source) + @($dirs | ForEach-Object { $_.FullName })) {   # .FullName on an empty list would add a $null
     $rel = $dir.Substring($source.Length).TrimStart('\')
     $target = if ($rel) { "`$INSTDIR\$(Get-NsisText $rel)" } else { '$INSTDIR' }
     $files = @(Get-ChildItem -LiteralPath $dir -File | Sort-Object Name)
