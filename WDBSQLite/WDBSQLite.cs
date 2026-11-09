@@ -1,101 +1,24 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data.SQLite;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Microsoft.Data.Sqlite;
 
 namespace WDBSQLite
 {
-    public class WDBSQLite
+    /// <summary>The uploader's list of files, in a SQLite file. Called from the UI and the upload tasks, so every call locks.</summary>
+    public sealed class WDBSQLite : IDisposable
     {
-        public SQLiteConnection conn;
-        private WDBTraceLog.TraceLog TraceLogObj;
-        public string ObjectName = "WDBSQLite";
-        private string SQLFile;
-        private string _ThreadName;
-        public string ThreadName
+        private const string Columns = "ImportID, Username, ImportTitle, Date_Time, FileSize, FileName, Format, FileHash, Status, Message";
+
+        private readonly object _gate = new();
+        private readonly SqliteConnection _conn;
+        private bool _disposed;
+
+        public WDBSQLite(string path)
         {
-            get { return _ThreadName; }
-            set { _ThreadName = value; }
-        }
+            string? folder = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
 
-        public WDBSQLite(string Path, string UI, WDBTraceLog.TraceLog WDBTraceLogObj)
-        {
-            SQLFile = Path;
-            WDBTraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "Start Call: WDBSQLite()");
-            this.TraceLogObj = WDBTraceLogObj;
-            if (!File.Exists(Path))
-            {
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start of Create SQLite DB. " + Path);
-                if (UI.ToLower() == "client")
-                {
-                    this.conn = CreateClientDB(Path);
-                }
-                else if (UI.ToLower() == "uploader")
-                {
-                    this.conn = CreateUploadDB(Path);
-                }
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End of Create SQLite DB." + Path);
-            }
-            else
-            {
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "SQLite data source=" + Path);
-                conn = new SQLiteConnection("data source=" + Path);
-                conn.Open();
-            }
-            TraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "End Call: WDBSQLite()");
-        }
-
-        public void Dispose(bool SaveDB = false)
-        {
-            if (!SaveDB)
-            {
-                SQLiteCommand cmd;
-                cmd = new SQLiteCommand(this.conn);
-                cmd.CommandText = @"DELETE FROM ImportView;    
-DELETE FROM sqlite_sequence WHERE name = 'ImportView'";
-                cmd.ExecuteNonQuery();
-                //File.Delete(SQLFile);
-            }
-            this.conn.Dispose();
-        }
-
-        private SQLiteConnection CreateDB(string DbFile)
-        {
-            TraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "Start Call: CreateDB");
-            try
-            {
-                SQLiteConnection.CreateFile(DbFile);
-            }
-            catch (Exception e)
-            {
-                string DbPath = Path.GetDirectoryName(DbFile);
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Failed to Create SQLite DB: " + e.Message.ToString());
-                Directory.CreateDirectory(DbPath);
-                SQLiteConnection.CreateFile(DbFile);
-            }
-            Debug.Write("Created Database: " + DbFile);
-
-            conn = new SQLiteConnection("data source=" + DbFile);
-            conn.Open();
-            TraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "End Call: CreateDB");
-            return conn;
-        }
-
-        private SQLiteConnection CreateUploadDB(string DbPath)
-        {
-            TraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "Start Call: CreateUploadDB");
-            SQLiteConnection conn;
-            SQLiteCommand cmd;
-
-            conn = CreateDB(DbPath);
-
-            cmd = new SQLiteCommand(conn);
-            cmd.CommandText = @"CREATE TABLE ImportView (
+            _conn = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path }.ToString());
+            _conn.Open();
+            Execute(@"CREATE TABLE IF NOT EXISTS ImportView (
 ID INTEGER PRIMARY KEY AUTOINCREMENT,
 ImportID INT,
 Username VARCHAR(255),
@@ -103,57 +26,122 @@ ImportTitle VARCHAR(255),
 Date_Time VARCHAR(255),
 FileSize VARCHAR(255),
 FileName VARCHAR(255),
+Format VARCHAR(255),
 FileHash VARCHAR(255),
 Status VARCHAR(255),
-Message VARCHAR(255)
-
-)";
-            cmd.ExecuteNonQuery();
-            Debug.Write("Successfully created `ImportView` Table");
-
-            cmd.Dispose();
-            TraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "End Call: CreateUploadDB");
-            return conn;
+Message VARCHAR(255))");
+            // A database from before the Format column
+            if (!HasColumn("ImportView", "Format")) Execute("ALTER TABLE ImportView ADD COLUMN Format VARCHAR(255)");
         }
 
-        private SQLiteConnection CreateClientDB(string DbPath)
+        public List<ImportRow> GetImportRows()
         {
-            TraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "Start Call: CreateClientDB");
-            SQLiteConnection conn;
-            SQLiteCommand cmd;
-
-            conn = CreateDB(DbPath);
-
-            cmd = new SQLiteCommand(conn);
-
-            cmd.CommandText = @"CREATE TABLE ImportView (
-ID INTEGER PRIMARY KEY AUTOINCREMENT,
-Username VARCHAR(255),
-ImportTitle VARCHAR(255),
-Date_Time VARCHAR(255),
-FileSize VARCHAR(255),
-FileName VARCHAR(255),
-FileHash VARCHAR(255),
-Status VARCHAR(255),
-Message VARCHAR(255)
-
-)";
-            cmd.ExecuteNonQuery();
-            Debug.Write("Successfully created `ImportView` Table");
-
-            cmd.Dispose();
-            TraceLogObj.WriteToLog(ThreadName, ObjectName, GetCurrentMethod(), "End Call: CreateClientDB");
-            return conn;
+            lock (_gate)
+            {
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = $"SELECT {Columns} FROM ImportView ORDER BY ID";
+                using var reader = cmd.ExecuteReader();
+                var rows = new List<ImportRow>();
+                while (reader.Read()) rows.Add(Read(reader));
+                return rows;
+            }
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public string GetCurrentMethod()
+        public ImportRow? FindByHash(string fileHash)
         {
-            StackTrace st = new StackTrace();
-            StackFrame sf = st.GetFrame(1);
-
-            return sf.GetMethod().Name;
+            lock (_gate)
+            {
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = $"SELECT {Columns} FROM ImportView WHERE FileHash = $hash ORDER BY ID DESC LIMIT 1";
+                cmd.Parameters.AddWithValue("$hash", fileHash.ToUpperInvariant());
+                using var reader = cmd.ExecuteReader();
+                return reader.Read() ? Read(reader) : null;
+            }
         }
 
+        /// <summary>Adds the row, or updates the row its hash already has.</summary>
+        public void SaveRow(ImportRow row)
+        {
+            lock (_gate)
+            {
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = @"UPDATE ImportView SET ImportID = $id, Username = $user, ImportTitle = $title, Date_Time = $date, FileSize = $size,
+FileName = $name, Format = $format, Status = $status, Message = $message WHERE FileHash = $hash";
+                Bind(cmd, row);
+                if (cmd.ExecuteNonQuery() > 0) return;
+
+                cmd.CommandText = @"INSERT INTO ImportView (ImportID, Username, ImportTitle, Date_Time, FileSize, FileName, Format, FileHash, Status, Message)
+VALUES ($id, $user, $title, $date, $size, $name, $format, $hash, $status, $message)";
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>Empties the list, which is what closing the app without "Exit and Save DB" does.</summary>
+        public void Clear() => Execute("DELETE FROM ImportView; DELETE FROM sqlite_sequence WHERE name = 'ImportView';");
+
+        public void Dispose()
+        {
+            lock (_gate)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _conn.Dispose();
+            }
+        }
+
+        private static void Bind(SqliteCommand cmd, ImportRow row)
+        {
+            cmd.Parameters.AddWithValue("$id", row.ImportID);
+            cmd.Parameters.AddWithValue("$user", row.Username);
+            cmd.Parameters.AddWithValue("$title", row.ImportTitle);
+            cmd.Parameters.AddWithValue("$date", row.DateTime);
+            cmd.Parameters.AddWithValue("$size", row.FileSize);
+            cmd.Parameters.AddWithValue("$name", row.FileName);
+            cmd.Parameters.AddWithValue("$format", row.Format);
+            cmd.Parameters.AddWithValue("$hash", row.FileHash.ToUpperInvariant());
+            cmd.Parameters.AddWithValue("$status", row.Status);
+            cmd.Parameters.AddWithValue("$message", row.Message);
+        }
+
+        private static ImportRow Read(SqliteDataReader r) => new()
+        {
+            ImportID = r.IsDBNull(0) ? 0 : r.GetInt32(0),
+            Username = Text(r, 1),
+            ImportTitle = Text(r, 2),
+            DateTime = Text(r, 3),
+            FileSize = Text(r, 4),
+            FileName = Text(r, 5),
+            Format = Text(r, 6),
+            FileHash = Text(r, 7),
+            Status = Text(r, 8),
+            Message = Text(r, 9),
+        };
+
+        private static string Text(SqliteDataReader r, int ordinal) => r.IsDBNull(ordinal) ? "" : r.GetString(ordinal);
+
+        private bool HasColumn(string table, string column)
+        {
+            lock (_gate)
+            {
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = $"PRAGMA table_info({table})";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                return false;
+            }
+        }
+
+        private void Execute(string sql)
+        {
+            lock (_gate)
+            {
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.ExecuteNonQuery();
+            }
+        }
     }
 }

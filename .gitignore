@@ -1,8 +1,11 @@
 bin/
 obj/
 Build/
+publish/
+release-files/
+TestResults/
 *.pdb
 *.manifest
+*.csproj.user
 .vs/
-WiFiDBUploader/App.config
 *.pfx

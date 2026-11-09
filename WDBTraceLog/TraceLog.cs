@@ -1,72 +1,41 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Diagnostics;
 
 namespace WDBTraceLog
 {
-    public class TraceLog
+    /// <summary>Optional trace log, written to from any thread. Never pass API keys to it.</summary>
+    public sealed class TraceLog : IDisposable
     {
-        private string LogPath;
-        private bool PerRunRotate;
-        private System.IO.StreamWriter file;
-        private string LogFile;
-        public bool DEBUG = false;
-        public bool TraceLogEnable;
+        private readonly object _gate = new();
+        private readonly StreamWriter? _file;
 
-        public TraceLog(string LogPath, bool TraceLogEnable, bool PerRunRotate)
+        public bool TraceLogEnable { get; }
+
+        public TraceLog(string logFolder, bool traceLogEnable, bool perRunRotate)
         {
-            this.TraceLogEnable = TraceLogEnable;
-            this.PerRunRotate = PerRunRotate;
-            this.LogPath = LogPath;
-            Debug.WriteLine("TraceLogging TraceLogEnable: " + TraceLogEnable);
-            if (TraceLogEnable)
+            TraceLogEnable = traceLogEnable;
+            if (!traceLogEnable) return;
+
+            string name = perRunRotate ? $"Trace-{DateTime.Now:yyyyMMdd-HHmmss}.log" : "Trace.log";
+            Directory.CreateDirectory(logFolder);
+            _file = new StreamWriter(Path.Combine(logFolder, name), append: true) { AutoFlush = true };
+        }
+
+        public void Write(string source, string message)
+        {
+            string line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}][{source}] {message}";
+            Debug.WriteLine(line);
+            if (_file is null) return;
+            lock (_gate)
             {
-                if (PerRunRotate)
-                {
-                    this.LogFile = LogPath + "Trace-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".log";
-                }
-                else
-                {
-                    this.LogFile = LogPath + "/Trace.log";
-                }
-                try
-                {
-                    //Debug.WriteLine(LogFile);
-                    this.file = new System.IO.StreamWriter(LogFile, true);
-                }
-                catch(Exception e)
-                {
-                    Debug.WriteLine("Exception Message: " + e.Message);
-                    Directory.CreateDirectory(LogPath);
-                    this.file = new System.IO.StreamWriter(LogFile, true);
-                }
-                this.file.AutoFlush = true;
+                _file.WriteLine(line);
             }
         }
 
         public void Dispose()
         {
-            if( file != null)
+            lock (_gate)
             {
-                file.Close();
-            }
-        }
-
-        public void WriteToLog(string ThreadName, string ObjectName, string MethodName, string message)
-        {
-            string line = "[" + DateTime.Now.ToString("yyyy-MM-dd") + "]" + "[" + DateTime.Now.ToString("HH:mm:ss") + "]" + "[" + ThreadName + "]" + "[" + ObjectName + "]" + "[" + MethodName + "]" + "[" + message + "]";
-            Debug.WriteLine(line);
-            if (DEBUG == true)
-            {
-                Debug.WriteLine(line);
-            }
-            if (TraceLogEnable)
-            {
-                file.WriteLine(line);
+                _file?.Dispose();
             }
         }
     }
