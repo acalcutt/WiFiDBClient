@@ -1,443 +1,283 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data.SQLite;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Security.Cryptography;
 using WDBAPI;
 using WDBSQLite;
+using WDBTraceLog;
+
 namespace WDBCommon
 {
-    public class WDBCommon
+    public enum ImportMode
     {
-        private WDBAPI.WDBAPI WDBAPIObj;
-        private WDBSQLite.WDBSQLite WDBSQLiteObj;
+        /// <summary>The user chose this file: failures are shown and it can be tried again.</summary>
+        Manual,
 
-        public string LogPath;
-        private string _ThreadName;
-        public string ThreadName
+        /// <summary>A folder scan on a timer: runs over and over, so a file is dealt with once.</summary>
+        Automatic,
+    }
+
+    /// <summary>Takes files from disk to WifiDB and keeps their rows up to date.</summary>
+    public sealed class WDBCommon
+    {
+        /// <summary>A file changed this recently may still be being written, so an automatic scan leaves it for the next run.</summary>
+        private static readonly TimeSpan SettleTime = TimeSpan.FromSeconds(60);
+
+        /// <summary>How many checks in a row may not find a file before it stops being followed.</summary>
+        private const int MaxUnknownChecks = 5;
+
+        private readonly WDBAPI.WDBAPI _api;
+        private readonly WDBSQLite.WDBSQLite _db;
+        private readonly TraceLog _log;
+        private readonly SemaphoreSlim _importGate = new(1, 1);
+        private readonly Dictionary<string, (long Length, DateTime Written, string Hash)> _hashes = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, int> _unknownChecks = new(StringComparer.OrdinalIgnoreCase);
+
+        public bool ArchiveImports { get; set; }
+        public string ArchiveImportsFolderPath { get; set; } = "";
+        public string Username { get; set; } = "";
+        public string ApiKey { get; set; } = "";
+
+        public WDBCommon(WDBSQLite.WDBSQLite db, WDBAPI.WDBAPI api, TraceLog log)
         {
-            get { return _ThreadName; }
-            set {
-                _ThreadName = value;
-                WDBSQLiteObj.ThreadName = value;
-                WDBAPIObj.ThreadName = value;
-            }
-        }
-        public string ObjectName = "WDBCommon";
-
-        public int InternalImportID = 0;
-
-        public bool AutoUploadFolder;
-        public string AutoUploadFolderPath;
-        public bool ArchiveImports;
-        public string ArchiveImportsFolderPath;
-
-        public string DefaultImportNotes;
-        public string DefaultImportTitle;
-        public bool UseDefaultImportValues;
-
-        public string ServerAddress;
-        public string ApiPath;
-        public string Username;
-        public string ApiKey;
-        public string ApiCompiledPath;
-        private WDBTraceLog.TraceLog TraceLogObj;
-
-        public WDBCommon(WDBSQLite.WDBSQLite ArgWDBSQliteObj, WDBAPI.WDBAPI WDBAPIObj, WDBTraceLog.TraceLog WDBTraceLogObj)
-        {
-            WDBTraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: WDBCommon()");
-            this.WDBAPIObj = WDBAPIObj;
-            TraceLogObj = WDBTraceLogObj;
-            WDBSQLiteObj = ArgWDBSQliteObj;
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: WDBCommon()");
-        }
-        
-        public void initApi()
-        {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Function Call: Init API.");
-            WDBAPIObj.ApiCompiledPath = ApiCompiledPath;
-
-            //Debug.WriteLine(_ThreadName);
-            WDBSQLiteObj.ThreadName = _ThreadName;
-            WDBAPIObj.ThreadName = _ThreadName;
-            WDBAPIObj.ApiKey = ApiKey;
-            WDBAPIObj.Username = Username;
-            WDBAPIObj.DefaultImportTitle = DefaultImportTitle;
-            WDBAPIObj.DefaultImportNotes = DefaultImportNotes;
-            WDBAPIObj.UseDefaultImportValues = UseDefaultImportValues;
-            WDBAPIObj.LogPath = LogPath;
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Function Call: Init API.");
+            _db = db;
+            _api = api;
+            _log = log;
         }
 
-        ///
-        /// Common Fucntions
-        ///
+        /// <summary>The importable-looking files directly in a folder.</summary>
+        public static List<string> FindFiles(string folder) =>
+            Directory.EnumerateFiles(folder)
+                .Where(f => ImportFileType.ScannedExtensions.Contains(Path.GetExtension(f)))
+                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-        public int IsFileImported(string query, bool LocalOnly = false)
+        public async Task ImportFolderAsync(string folder, string title, string notes, ImportMode mode, IProgress<ImportRow>? progress, CancellationToken ct)
         {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: IsFileImported");
-            //Check the Local SQLite DB for the File hash, If it is found, return now.
-            if (CheckSQLFileHash(query) == 0)
+            foreach (string file in FindFiles(folder))
             {
-                if(!LocalOnly) //if set to true, dont Check the WiFiDB API
+                ct.ThrowIfCancellationRequested();
+                if (mode == ImportMode.Automatic && DateTime.UtcNow - File.GetLastWriteTimeUtc(file) < SettleTime)
                 {
-                    // If the filehash was not found in the Local SQLite DB, check the WDB API.
-                    if (CheckFileHash(query) == 0)
-                    {
-                        TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: IsFileImported");
-                        return 0; //Hash not found.
-                    }
-                    else
-                    {
-                        TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: IsFileImported");
-                        return 1; //Hash found.
-                    }
-                }else
-                {
-                    TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: IsFileImported");
-                    return 0; // Only Check Local, and Hash was Not Found.
+                    _log.Write("Import", $"Leaving {file} for the next scan: it changed moments ago.");
+                    continue;
                 }
-            } else
-            {
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: IsFileImported");
-                return 2; //Local Hash Found
-            }            
-        }
-
-
-        ///
-        /// WiFiDB API Functions
-        ///
-        public int CheckFileHash(string query)
-        {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: CheckFileHash");
-            string APIResponse = WDBAPIObj.CheckFileHash(query);
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "IsFileImported Response: " + APIResponse);
-            string response = WDBAPIObj.ParseApiResponse(APIResponse);
-            
-            string[] stringSeparators = new string[] { "|~|" };
-            string[] split = response.Split(stringSeparators, StringSplitOptions.None);
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "split[1].ToLower(): " + split[1].ToLower());
-
-            if (split[1].ToLower() == "hash not found in wifidb")
-            {
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: CheckFileHash: Hash Not Found");
-                return 0;
-            }
-            else
-            {
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: CheckFileHash: Hash Found");
-                return 1;
+                await ImportFileAsync(file, title, notes, mode, progress, ct);
             }
         }
 
-        public void GetHashStatus(string query, BackgroundWorker BgWk)
+        /// <summary>One file at a time across the app, so a timer and a menu click can't both send the same file.</summary>
+        public async Task ImportFileAsync(string path, string title, string notes, ImportMode mode, IProgress<ImportRow>? progress, CancellationToken ct)
         {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: GetHashStatus");
-            BgWk.ReportProgress(0, "");
-            BgWk.ReportProgress(100, WDBAPIObj.ParseApiResponse(WDBAPIObj.CheckFileHash(query)));
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: GetHashStatus");
-        }
-        
-        public void GetDaemonStatuses(string query, BackgroundWorker BgWk)
-        {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: GetDaemonStatuses");
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Active Server: " + WDBAPIObj.ApiCompiledPath);
-            BgWk.ReportProgress(0, "");
-            BgWk.ReportProgress(100, WDBAPIObj.ParseApiResponse(WDBAPIObj.ApiGetDaemonStatuses(query)));
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: GetDaemonStatuses");
-        }
-
-        public void GetWaiting(string query, BackgroundWorker BgWk)
-        {
-            
-        }
-
-        public List<KeyValuePair<int, string>> ImportFolder(string Path, string ImportTitle, string ImportNotes, BackgroundWorker BW)
-        {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: ImportFolder");
-            var responses = new List<KeyValuePair<int, string>>();
+            await _importGate.WaitAsync(ct);
             try
             {
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Auto Import Folder: " + Path + " -> " + Directory.Exists(Path));
-                if (Directory.Exists(Path)) 
-                {
-                    TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Auto Import Folder: " + Path);
-                    var md5 = MD5.Create();
-
-                    string[] extensions = new string[] { "*.vs1", "*.vsz", "*.txt", "*.csv", "*.db", "*.db3", "*.mdb", "*.netxml" };
-
-                    // Loop through the file extension types, find them in the provided folder, then import it.
-                    foreach (string ext in extensions)
-                    {
-                        TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Extension that will be used: " + ext);
-                        string[] files = Directory.GetFiles(Path, ext);
-                        TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "The number of VS1 files: " + files.Length);
-                        if (files.Length > 0)
-                        {
-                            foreach (string file in files)
-                            {
-                                responses.Add(new KeyValuePair<int, string>(InternalImportID, ImportFile(file, ImportTitle, ImportNotes, BW)));
-                            }
-                        }
-                    }
-                }else
-                {
-                    responses.Add(new KeyValuePair<int, string>(InternalImportID, "error|~|Auto Import Folder Not Found."));
-                }
+                await ImportFileCoreAsync(path, title, notes, mode, progress, ct);
             }
-            catch (Exception e)
+            finally
             {
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "The process failed: " + e.ToString());
+                _importGate.Release();
             }
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: ImportFolder");
-            return responses;
         }
 
-        private void ArchiveImportedFile(string FilePath)
+        private async Task ImportFileCoreAsync(string path, string title, string notes, ImportMode mode, IProgress<ImportRow>? progress, CancellationToken ct)
         {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: ArchiveImportedFile");
-            if (ArchiveImports && (ArchiveImportsFolderPath != "" || ArchiveImportsFolderPath != null) )
+            ImportFileInfo info;
+            string hash;
+            try
             {
-                try
+                info = ImportFileType.Detect(path);
+                if (info.Kind == ImportFileKind.NotRecognized && mode == ImportMode.Automatic)
                 {
-                    string FileName = Path.GetFileName(FilePath);
-
-                    string ArchivedFile = ArchiveImportsFolderPath + "\\" + FileName;
-
-                    File.Move(FilePath, ArchivedFile);
-                    TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), FilePath + " was moved to " + ArchivedFile);
-                    
+                    _log.Write("Import", $"Skipping {path}: {info.Reason}");
+                    return;
                 }
-                catch (Exception e)
+                hash = await HashFileAsync(path, ct);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Probably still open somewhere. A scan comes back to it; a user who chose it wants to know.
+                _log.Write("Import", $"Couldn't read {path}: {ex.Message}");
+                if (mode == ImportMode.Manual)
                 {
-                    TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "The process failed: " + e.ToString());
+                    var unreadable = NewRow(path, "", "UNREADABLE:" + path.ToUpperInvariant(), title);
+                    unreadable.Status = ImportStatus.Error;
+                    unreadable.Message = $"Couldn't read the file: {ex.Message}";
+                    Publish(unreadable, progress);
                 }
+                return;
+            }
+
+            ImportRow? existing = _db.FindByHash(hash);
+            if (existing is not null)
+            {
+                bool retry = mode == ImportMode.Manual ? ImportStatus.CanRetry(existing.Status) : existing.Status == ImportStatus.Error;
+                if (!retry) return;
+            }
+
+            ImportRow row = NewRow(path, info.Format, hash, title);
+            if (info.Kind != ImportFileKind.Accepted)
+            {
+                row.Status = ImportStatus.Unsupported;
+                row.Message = info.Reason ?? "WifiDB can't import this file.";
+                Publish(row, progress);
+                return;
+            }
+
+            row.Status = ImportStatus.Uploading;
+            row.Message = "Checking WifiDB for this file...";
+            Publish(row, progress);
+
+            RemoteFileStatus known = await _api.CheckHashAsync(hash, ct);
+            if (known.Error is not null)
+            {
+                Finish(row, ImportStatus.Error, known.Error, progress);
+                return;
+            }
+            if (known.State != RemoteFileState.Unknown)
+            {
+                ApplyRemote(row, known);
+                row.Message = "Already on WifiDB. " + row.Message;
+                Publish(row, progress);
+                return;
+            }
+
+            row.Message = "Uploading file to WifiDB...";
+            Publish(row, progress);
+
+            UploadResult result = await _api.UploadAsync(path, title, notes, "", ct);
+            if (result.Success)
+            {
+                row.Status = ImportStatus.Waiting;
+                row.Message = result.Message;
+                if (int.TryParse(result.ImportId, out int importId)) row.ImportID = importId;
+                if (!string.IsNullOrEmpty(result.Title)) row.ImportTitle = result.Title;
+                Publish(row, progress);
+                ArchiveImportedFile(path);
+            }
+            else if (result.AlreadyKnown)
+            {
+                RemoteFileStatus now = await _api.CheckHashAsync(hash, ct);
+                if (now.Error is null && now.State != RemoteFileState.Unknown) ApplyRemote(row, now);
+                else row.Status = ImportStatus.Finished;
+                row.Message = result.Message;
+                Publish(row, progress);
             }
             else
             {
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Archve Imported Files is disabled.");
+                Finish(row, result.ConnectionFailed ? ImportStatus.Error : ImportStatus.Rejected, result.Message, progress);
             }
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: ArchiveImportedFile");
         }
 
-        public string ImportFile(string FilePath, string ImportTitle, string ImportNotes, BackgroundWorker BW)
+        /// <summary>
+        /// Asks WifiDB about rows still in its queue. The profile answers for a signed-in user's files all at once and is
+        /// the only thing that reports failed imports; check_hash covers anonymous uploads and servers without the profile.
+        /// </summary>
+        /// <returns>The profile's error, if signing in was the problem, for the status bar.</returns>
+        public async Task<string?> RefreshStatusesAsync(IReadOnlyList<ImportRow> rows, IProgress<ImportRow>? progress, CancellationToken ct)
         {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: ImportFile");
-            string response;
-            byte[] hashBytes;
-            string hashish;
-            var md5 = MD5.Create();
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Open Import File: " + FilePath);
-            using (var inputFileStream = File.Open(FilePath, FileMode.Open))
+            if (rows.Count == 0) return null;
+
+            ProfileResult? profile = null;
+            bool signedIn = Username.Length > 0 && ApiKey.Length > 0 && !Username.Equals("AnonCoward", StringComparison.OrdinalIgnoreCase);
+            if (signedIn) profile = await _api.GetProfileAsync(ct);
+
+            foreach (ImportRow original in rows)
             {
-                hashBytes = md5.ComputeHash(inputFileStream);
-                hashish = BitConverter.ToString(hashBytes).Replace("-", String.Empty);
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Import File Hash: " + hashish);
-            }
-            int IsFileImportedResult = IsFileImported(hashish);
+                ct.ThrowIfCancellationRequested();
+                ImportRow row = original.Copy();
+                RemoteFileStatus? remote = null;
+                if (profile?.Files is not null && profile.Files.TryGetValue(row.FileHash, out RemoteFileStatus? fromProfile)) remote = fromProfile;
+                remote ??= await _api.CheckHashAsync(row.FileHash, ct);
 
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "IsFileImportedResult :" + IsFileImportedResult);
-            if (IsFileImportedResult == 0)
-            {
-                BW.ReportProgress(0, "newrow|~|" + FilePath + "|~|" + hashish);
-                string RawResponse = WDBAPIObj.ApiImportFile(FilePath, ImportTitle, ImportNotes);
-
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), RawResponse);
-
-                response = WDBAPIObj.ParseApiResponse(RawResponse);
-
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Parse Response Result: " + response);
-
-                BW.ReportProgress(0, response + "::" + FilePath);
-                ArchiveImportedFile(FilePath);
-            }
-            else if (IsFileImportedResult == 2)
-            {
-                response = "error|~|Already Local Imported.-~-" + FilePath;
-                BW.ReportProgress(0, response);
-            }
-            else
-            { 
-                response = "error|~|Already Imported.-~-" + FilePath;
-                BW.ReportProgress(0, response);
-            }
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "File Import Response return: " + response);
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: ImportFile");
-            return response;
-        }
-
-
-
-
-        ///
-        /// SQLite Functions.
-        ///
-
-        public int CheckSQLFileHash(string query)
-        {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: CheckSQLFileHash");
-            SQLiteCommand cmd;
-            cmd = new SQLiteCommand(WDBSQLiteObj.conn);
-            int ret = 0;
-            cmd.CommandText = @"SELECT `ID` FROM `ImportView` WHERE `FileHash` = ?";
-
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "FileHash query: " + query);
-
-            var filehash = cmd.CreateParameter();
-            filehash.Value = query;
-            cmd.Parameters.Add(filehash);
-
-            SQLiteDataReader reader;
-            reader = cmd.ExecuteReader();
-
-            while (reader.Read())
-            {
-                Debug.WriteLine("CheckSQLFileHash: " + reader["ID"].ToString() );
-                if(Int32.Parse(reader["ID"].ToString()) > 0)
+                if (remote.Error is not null) continue;   // says nothing about the file; try again next time
+                if (remote.State == RemoteFileState.Unknown)
                 {
-                    ret = 1;
+                    _unknownChecks[row.FileHash] = _unknownChecks.GetValueOrDefault(row.FileHash) + 1;
+                    if (_unknownChecks[row.FileHash] < MaxUnknownChecks) continue;   // it may be between two of WifiDB's queues
+                    row.Status = ImportStatus.Unknown;
+                    row.Message = "WifiDB no longer lists this file. Its import may have failed.";
+                    Publish(row, progress);
+                    continue;
                 }
+
+                _unknownChecks.Remove(row.FileHash);
+                if (ApplyRemote(row, remote)) Publish(row, progress);
             }
-            cmd.Dispose();
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: CheckSQLFileHash");
-            return ret;
+            return profile?.Error;
         }
 
-        public List<ImportRow> GetImportRows()
+        private static bool ApplyRemote(ImportRow row, RemoteFileStatus remote)
         {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: GetImportRows");
-            string ImportID;
-            SQLiteCommand cmd;
-            SQLiteDataReader reader;
-
-            List<ImportRow> ImportRows = new List<ImportRow>();
-            cmd = new SQLiteCommand(WDBSQLiteObj.conn);
-            cmd.CommandText = @"SELECT * FROM `ImportView`";
-            
-            reader = cmd.ExecuteReader();
-            while (reader.Read())
+            string status = remote.State switch
             {
-                ImportRow ImportRowObj = new ImportRow();
-                if (reader["ImportID"].ToString() == "")
+                RemoteFileState.Waiting => ImportStatus.Waiting,
+                RemoteFileState.Importing => ImportStatus.Importing,
+                RemoteFileState.Finished => ImportStatus.Finished,
+                RemoteFileState.Failed => ImportStatus.Bad,
+                _ => ImportStatus.Unknown,
+            };
+            bool changed = row.Status != status || row.Message != remote.Message;
+            row.Status = status;
+            row.Message = remote.Message;
+            if (remote.ImportId != 0) row.ImportID = remote.ImportId;
+            if (!string.IsNullOrEmpty(remote.Title)) row.ImportTitle = remote.Title;
+            return changed;
+        }
+
+        private void Finish(ImportRow row, string status, string message, IProgress<ImportRow>? progress)
+        {
+            row.Status = status;
+            row.Message = message;
+            Publish(row, progress);
+        }
+
+        /// <summary>Saves the row and hands the list its own copy, since the caller keeps changing this one.</summary>
+        private void Publish(ImportRow row, IProgress<ImportRow>? progress)
+        {
+            _db.SaveRow(row);
+            progress?.Report(row.Copy());
+        }
+
+        private ImportRow NewRow(string path, string format, string hash, string title) => new()
+        {
+            Username = Username,
+            ImportTitle = title,
+            DateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+            FileSize = File.Exists(path) ? new FileInfo(path).Length.ToString() : "",
+            FileName = path,
+            Format = format,
+            FileHash = hash,
+        };
+
+        /// <summary>The file's MD5, as WifiDB computes it. Remembered until the file changes, because scans repeat.</summary>
+        private async Task<string> HashFileAsync(string path, CancellationToken ct)
+        {
+            var file = new FileInfo(path);
+            if (_hashes.TryGetValue(path, out var cached) && cached.Length == file.Length && cached.Written == file.LastWriteTimeUtc)
+                return cached.Hash;
+
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            string hash = Convert.ToHexString(await MD5.HashDataAsync(stream, ct));
+            _hashes[path] = (file.Length, file.LastWriteTimeUtc, hash);
+            return hash;
+        }
+
+        private void ArchiveImportedFile(string path)
+        {
+            if (!ArchiveImports || string.IsNullOrWhiteSpace(ArchiveImportsFolderPath)) return;
+            try
+            {
+                Directory.CreateDirectory(ArchiveImportsFolderPath);
+                string target = Path.Combine(ArchiveImportsFolderPath, Path.GetFileName(path));
+                for (int i = 1; File.Exists(target); i++)
                 {
-                    ImportID = "0";
-                }else
-                {
-                    ImportID = reader["ImportID"].ToString();
+                    target = Path.Combine(ArchiveImportsFolderPath, $"{Path.GetFileNameWithoutExtension(path)} ({i}){Path.GetExtension(path)}");
                 }
-                TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "ImportID For IntParse: "+ImportID);
-                ImportRowObj.ImportID = Int32.Parse(ImportID);
-                ImportRowObj.Username = reader["Username"].ToString();
-                ImportRowObj.ImportTitle = reader["ImportTitle"].ToString();
-                ImportRowObj.DateTime = reader["Date_Time"].ToString();
-                ImportRowObj.FileSize = reader["FileSize"].ToString();
-                ImportRowObj.FileName = reader["FileName"].ToString();
-                ImportRowObj.FileHash = reader["FileHash"].ToString();
-                ImportRowObj.Status = reader["Status"].ToString();
-                ImportRowObj.Message = reader["Message"].ToString();
-
-                ImportRows.Add(ImportRowObj);
-
+                File.Move(path, target);
+                _log.Write("Import", $"Archived {path} to {target}");
             }
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: GetImportRows");
-            return ImportRows;
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log.Write("Import", $"Couldn't archive {path}: {ex.Message}");
+            }
         }
-        
-        public void InsertImportRow(ImportRow ImportRowObj)
-        {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: InsertImportRow");
-            SQLiteCommand cmd;
-            cmd = new SQLiteCommand(WDBSQLiteObj.conn);
-            cmd.CommandText = @"INSERT INTO `ImportView` 
-(`Username`, `Date_Time`, `FileSize`, `FileName`, `FileHash`, `Status`, `Message`) 
-VALUES ( ?, ?, ?, ?, ?, ?, ?)";
-            var Username = cmd.CreateParameter();
-            Username.Value = ImportRowObj.Username;
-            cmd.Parameters.Add(Username);
-
-            var Date_Time = cmd.CreateParameter();
-            Date_Time.Value = ImportRowObj.DateTime;
-            cmd.Parameters.Add(Date_Time);
-
-            var FileSize = cmd.CreateParameter();
-            FileSize.Value = ImportRowObj.FileSize;
-            cmd.Parameters.Add(FileSize);
-
-            var FileName = cmd.CreateParameter();
-            FileName.Value = ImportRowObj.FileName;
-            cmd.Parameters.Add(FileName);
-
-            var FileHash = cmd.CreateParameter();
-            FileHash.Value = ImportRowObj.FileHash;
-            cmd.Parameters.Add(FileHash);
-
-            var Status = cmd.CreateParameter();
-            Status.Value = ImportRowObj.Status;
-            cmd.Parameters.Add(Status);
-
-            var Message = cmd.CreateParameter();
-            Message.Value = ImportRowObj.Message;
-            cmd.Parameters.Add(Message);
-
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "cmd.ExecuteNonQuery(): " + cmd.ExecuteNonQuery().ToString());
-
-            cmd.Dispose();
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: InsertImportRow");
-        }
-
-        public void UpdateImportRow(ImportRow ImportRowObj)
-        {
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "Start Call: UpdateImportRow");
-            SQLiteCommand cmd;
-            cmd = new SQLiteCommand(WDBSQLiteObj.conn);
-            cmd.CommandText = @"UPDATE `ImportView` SET 
-`ImportID` = ?,
-`ImportTitle` = ?,
-`Status` = ?,
-`Message` = ?
-WHERE `FileHash` = ?";
-
-            var ImportIDParm = cmd.CreateParameter();
-            ImportIDParm.Value = ImportRowObj.ImportID;
-            cmd.Parameters.Add(ImportIDParm);
-
-            var ImportTitleParm = cmd.CreateParameter();
-            ImportTitleParm.Value = ImportRowObj.ImportTitle;
-            cmd.Parameters.Add(ImportTitleParm);
-
-            var StatusParm = cmd.CreateParameter();
-            StatusParm.Value = ImportRowObj.Status;
-            cmd.Parameters.Add(StatusParm);
-
-            var MessageParm = cmd.CreateParameter();
-            MessageParm.Value = ImportRowObj.Message;
-            cmd.Parameters.Add(MessageParm);
-
-            var FileHashParm = cmd.CreateParameter();
-            FileHashParm.Value = ImportRowObj.FileHash.ToUpper();
-            cmd.Parameters.Add(FileHashParm);
-
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "cmd.ExecuteNonQuery(): " + cmd.ExecuteNonQuery().ToString());
-
-            cmd.Dispose();
-            TraceLogObj.WriteToLog(_ThreadName, ObjectName, GetCurrentMethod(), "End Call: UpdateImportRow");
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public string GetCurrentMethod()
-        {
-            StackTrace st = new StackTrace();
-            StackFrame sf = st.GetFrame(1);
-
-            return sf.GetMethod().Name;
-        }
-
     }
 }
