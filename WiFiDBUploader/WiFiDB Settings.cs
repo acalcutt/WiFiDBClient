@@ -51,7 +51,7 @@ namespace WiFiDBUploader
         private void RemoveServer_Click(object sender, EventArgs e)
         {
             int RemoveIndex = ServerList.FindIndex(ServerList => ServerList.ServerAddress.ToString().Replace("https://", "").Replace("http://", "").Equals(_SelectedServer, StringComparison.Ordinal));
-            //Debug.WriteLine("Remove Server From List, Index: " + RemoveIndex.ToString()  );
+            if (RemoveIndex < 0) return;
             ServerList.RemoveAt(RemoveIndex);
             this.comboBox1.Items.Remove(_SelectedServer);
         }

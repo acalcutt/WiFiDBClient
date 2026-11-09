@@ -54,6 +54,7 @@ namespace WiFiDBUploader
             this.Date = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.FileSize = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.FileName = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.Format = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.FileHash = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.Status = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.Message = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
@@ -203,6 +204,7 @@ namespace WiFiDBUploader
             this.Date,
             this.FileSize,
             this.FileName,
+            this.Format,
             this.FileHash,
             this.Status,
             this.Message});
@@ -246,8 +248,13 @@ namespace WiFiDBUploader
             this.FileName.Text = "File Name";
             this.FileName.Width = 270;
             // 
+            // Format
+            //
+            this.Format.Text = "Format";
+            this.Format.Width = 170;
+            //
             // FileHash
-            // 
+            //
             this.FileHash.Text = "File Hash Sum";
             this.FileHash.Width = 256;
             // 
@@ -422,6 +429,7 @@ namespace WiFiDBUploader
         private System.Windows.Forms.ColumnHeader Date;
         private System.Windows.Forms.ColumnHeader FileSize;
         private System.Windows.Forms.ColumnHeader FileName;
+        private System.Windows.Forms.ColumnHeader Format;
         private System.Windows.Forms.ColumnHeader FileHash;
         private System.Windows.Forms.ColumnHeader Status;
         private System.Windows.Forms.TabControl tabControl1;
